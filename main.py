@@ -1,7 +1,10 @@
 import cv2
 import numpy as np
 import pytesseract
-
+from tkinter import Tk, Button, Frame, Label
+from tkinter.filedialog import askopenfilename
+from PIL import Image, ImageDraw, ImageFont
+import threading
 pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
 # 预处理
@@ -71,7 +74,7 @@ def fixPosition(img, img_bin):
 
 
 # img_lic_canny = cv2.Canny(img_lic_bin, 100, 200)
-
+# 获取四个顶点坐标
 def findVertices(points):
     # 获取最小外接矩阵，中心点坐标，宽高，旋转角度
     rect = cv2.minAreaRect(points)
@@ -95,6 +98,7 @@ def findVertices(points):
     return vertices, rect
 
 
+# 图像倾斜校正
 def tiltCorrection(vertices, rect):
     # 畸变情况1
     if rect[2] > -45:
@@ -128,7 +132,7 @@ def tiltCorrection(vertices, rect):
     point_set_0 = np.float32(new_box)
     return point_set_0, point_set_1, new_box
 
-
+# 图像透视变换
 def transform(img, point_set_0, point_set_1):
     # 变换矩阵
     mat = cv2.getPerspectiveTransform(point_set_0, point_set_1)
@@ -147,30 +151,93 @@ def recognize_license_plate(lic_img):
     return license_number.strip()
 
 
-def main():
-    path = r'C:\Users\Mr.chen\PycharmProjects\pythonProject5\5.jpg'
+# 打开文件对话框选择图片
+def open_image():
+    Tk().withdraw()  # 隐藏主窗口
+    file_path = askopenfilename(title="选择车牌图片", filetypes=[("Image Files", "*.png;*.jpg;*.jpeg;*.bmp")])
+    return file_path
+
+
+# 在 Tkinter 中展示识别结果
+def show_result(license_number, result_image):
+    cv2.imshow("License Plate Recognition", result_image)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+
+
+# 处理图片并进行车牌识别
+def process_image():
+    image_path = open_image()
+    if not image_path:
+        print("未选择文件，程序结束")
+        return
+
     # 图像预处理
-    img, img_Gas, img_B, img_G, img_R, img_gray, img_HSV = imgProcess(path)
+    img, img_Gas, img_B, img_G, img_R, img_gray, img_HSV = imgProcess(image_path)
+
     # 初步识别
     img_bin = preIdentification(img_gray, img_HSV, img_B, img_R)
     points = fixPosition(img, img_bin)
     vertices, rect = findVertices(points)
     point_set_0, point_set_1, new_box = tiltCorrection(vertices, rect)
-    img_draw = cv2.drawContours(img.copy(), [new_box], -1, (0, 0, 255), 3)
     lic = transform(img, point_set_0, point_set_1)
-
-    # 显示校正后的车牌
-    cv2.namedWindow("Lic")
-    cv2.imshow("Lic", lic)
 
     # 识别车牌号码
     license_number = recognize_license_plate(lic)
     print(f"车牌号码是: {license_number}")
 
-    # 暂停、关闭窗口
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
+    # 创建窗口并显示结果
+    final_result = img.copy()
+
+    # 创建一个白色的空白区域来显示车牌识别结果，宽度缩小一半
+    result_area_width = 320  # 宽度缩小一半
+    result_area = np.zeros((480, result_area_width, 3), dtype=np.uint8)
+    result_area.fill(255)  # 填充白色
+
+    # 将车牌图像放大一倍
+    lic_resized = cv2.resize(lic, (320, 100))  # 放大车牌图像
+    result_area[0:100, 0:320] = lic_resized
+
+    # 使用PIL绘制中文文本
+    pil_img = Image.fromarray(result_area)  # 将 NumPy 数组转换为 PIL 图像
+    draw = ImageDraw.Draw(pil_img)
+
+    # 你可以使用系统字体文件，或者在此路径下找到支持中文的字体，例如"msyh.ttc"（微软雅黑）
+    font = ImageFont.truetype("C:\\Windows\\Fonts\\msyh.ttc", 15)  # 请确保路径正确
+
+    # 绘制文本
+    draw.text((10, 120), "车牌定位识别结果为：", font=font, fill=(0, 0, 0))
+    draw.text((10, 160), f"{license_number}", font=font, fill=(0, 0, 0))
+
+    # 转回到 NumPy 数组
+    result_area = np.array(pil_img)
+
+    # 拼接原图与识别结果
+    combined_image = np.hstack((final_result, result_area))  # 将原图和结果拼接在一起
+
+    # 显示合并后的图像
+    show_result(license_number, combined_image)
+
+
+# 创建界面
+def create_interface():
+    root = Tk()
+    root.title("车牌识别系统")
+
+    # 创建一个框架来显示图像和按钮
+    frame = Frame(root)
+    frame.pack(padx=20, pady=20)
+
+    # 图像展示区域
+    label = Label(frame, text="车牌识别系统", font=("Arial", 16))
+    label.pack(pady=10)
+
+    # 按钮用来选择并处理图片
+    button = Button(frame, text="选择图片并进行车牌识别", command=process_image)
+    button.pack(pady=20)
+
+    root.mainloop()
 
 
 if __name__ == '__main__':
-    main()
+    create_interface()
