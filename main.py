@@ -23,13 +23,16 @@ def imgProcess(path):
 
 # 初步识别
 def preIdentification(img_gray, img_HSV, img_B, img_R):
-    for i in range(480):
-        for j in range(640):
-            # 普通蓝色车牌，同时排除透明反光物质的干扰
-            if ((img_HSV[:, :, 0][i, j] - 115) ** 2 < 15 ** 2) and (img_B[i, j] > 70) and (img_R[i, j] < 40):
-                img_gray[i, j] = 255
-            else:
-                img_gray[i, j] = 0
+    # 将 HSV 通道转换为 int16，避免溢出
+    h_channel = img_HSV[:, :, 0].astype(np.int16)
+
+    # 条件过滤
+    mask = (np.abs(h_channel - 115) < 15) & (img_B > 70) & (img_R < 40)
+
+    # 应用条件到灰度图
+    img_gray[mask] = 255
+    img_gray[~mask] = 0
+
     # 定义核
     kernel_small = np.ones((3, 3))
     kernel_big = np.ones((7, 7))
@@ -40,6 +43,7 @@ def preIdentification(img_gray, img_HSV, img_B, img_R):
     img_close = cv2.GaussianBlur(img_close, (5, 5), 0)  # 高斯平滑
     _, img_bin = cv2.threshold(img_close, 100, 255, cv2.THRESH_BINARY)  # 二值化
     return img_bin
+
 
 
 # 定位
@@ -74,7 +78,7 @@ def findVertices(points):
     # 获取矩形四个顶点，浮点型
     box = cv2.boxPoints(rect)
     # 取整
-    box = np.int0(box)
+    box = np.int64(box)
     # 获取四个顶点坐标
     left_point_x = np.min(box[:, 0])
     right_point_x = np.max(box[:, 0])
