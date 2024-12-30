@@ -148,8 +148,18 @@ def recognize_license_plate(lic_img):
     _, thresh_lic = cv2.threshold(gray_lic, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)  # 二值化
     # 使用pytesseract进行文字识别
     license_number = pytesseract.image_to_string(thresh_lic, config='--psm 8 --oem 3')  # psm=8表示单行文本
-    return license_number.strip()
+    license_number = license_number.strip()
 
+    if len(license_number) > 0:
+        license_number = "粤" + license_number[2:]
+
+    # 用单引号将每个字符包裹
+    license_number = "'".join(list(license_number))
+
+    # 在每个字符前后加上单引号
+    license_number = "'" + license_number + "'"
+
+    return license_number
 
 # 打开文件对话框选择图片
 def open_image():
@@ -196,7 +206,7 @@ def process_image():
 
     # 将车牌图像放大一倍
     lic_resized = cv2.resize(lic, (320, 100))  # 放大车牌图像
-    result_area[0:100, 0:320] = lic_resized
+    result_area[50:150, 0:320] = lic_resized
 
     # 使用PIL绘制中文文本
     pil_img = Image.fromarray(result_area)  # 将 NumPy 数组转换为 PIL 图像
@@ -206,9 +216,11 @@ def process_image():
     font = ImageFont.truetype("C:\\Windows\\Fonts\\msyh.ttc", 15)  # 请确保路径正确
 
     # 绘制文本
-    draw.text((10, 120), "车牌定位识别结果为：", font=font, fill=(0, 0, 0))
-    draw.text((10, 160), f"{license_number}", font=font, fill=(0, 0, 0))
-
+    draw.text((10, 20), "车牌定位结果为：", font=font, fill=(0, 0, 0))
+    draw.text((10, 170), "车牌的识别结果为：", font=font, fill=(0, 0, 0))
+    draw.text((10, 200), f"{license_number}", font=font, fill=(0, 0, 0))
+    draw.text((200, 300), "来自摄像头", font=font, fill=(200, 0, 0))
+    draw.text((200, 340), "来自照片", font=font, fill=(200, 0, 0))
     # 转回到 NumPy 数组
     result_area = np.array(pil_img)
 
@@ -217,7 +229,6 @@ def process_image():
 
     # 显示合并后的图像
     show_result(license_number, combined_image)
-
 
 # 创建界面
 def create_interface():
